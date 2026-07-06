@@ -20,7 +20,7 @@ export async function exportNode(args: ExportNodeParams): Promise<ToolResult> {
         }
 
         const format = args.format || "PNG";
-        const scale = args.scale || 1;
+        const scale = Math.max(0.1, Math.min(args.scale || 1, 4));
 
         // Perform the export in Figma
         const exportSettings: ExportSettings = {

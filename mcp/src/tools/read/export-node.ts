@@ -47,7 +47,7 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
         },
         async ({ id, format, scale }) => {
             const taskFormat = format || "PNG";
-            const taskScale = scale || 1;
+            const taskScale = Math.max(0.1, Math.min(scale || 1, 4));
 
             const taskResult = await taskManager.runTask<TaskResult, any>("export-node", {
                 id,

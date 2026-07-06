@@ -219,6 +219,6 @@ function serializeCompactNode(node: SerializableNode, options: SerializeOptions,
     return result;
 }
 
-export function serializeNode(node: SerializableNode, visited: Set<string> = new Set(), recursive: boolean = false, maxDepth: number = 5): any {
+export function serializeNode(node: SerializableNode, visited: Set<string> = new Set(), recursive: boolean = false, maxDepth: number = 3): any {
     return serializeCompactNode(node, { recursive, maxDepth }, 0, visited);
 }

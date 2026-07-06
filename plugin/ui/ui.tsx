@@ -72,7 +72,7 @@ function Plugin(props: any) {
         command: task.command,
         args: task.args,
       });
-      console.log("start-task", task);
+      console.log("start-task", { id: task.id, command: task.command });
       addLogRef.current?.(`Task started: ${task.command} (ID: ${task.id})`);
     });
 
