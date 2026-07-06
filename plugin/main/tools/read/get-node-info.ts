@@ -7,7 +7,8 @@ export async function getNodeInfo(args: GetNodeInfoParams): Promise<ToolResult> 
     if (node) {
         // Since schema default is true, if args.recursive is undefined (not passed), we default to true.
         const shouldBeRecursive = args.recursive !== false;
-        const serializedNode = serializeNode(node as SceneNode, new Set(), shouldBeRecursive);
+        const maxDepth = args.maxDepth ?? 5;
+        const serializedNode = serializeNode(node as SceneNode, new Set(), shouldBeRecursive, maxDepth);
         return {
             isError: false,
             content: serializedNode

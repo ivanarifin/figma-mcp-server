@@ -6,7 +6,7 @@ import { safeToolProcessor } from "../safe-tool-processor.js";
 export function getNodeInfo(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "get-node-info",
-        "Get the information of a node. Supports recursive mapping to get full deep children structure for 1:1 coding.",
+        "Get a compact official-like Figma node tree for code generation. Recursive is true by default and maxDepth defaults to 5 to avoid huge timeouts; increase maxDepth only for smaller nodes.",
         GetNodeInfoParamsSchema.shape,
         async (params: GetNodeInfoParams) => {
             return await safeToolProcessor<GetNodeInfoParams>(
