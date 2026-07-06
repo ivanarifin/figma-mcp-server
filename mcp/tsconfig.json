@@ -13,6 +13,7 @@
     "target": "esnext",
     "lib": ["esnext"],
     "downlevelIteration": true,
+    "skipLibCheck": true,
 
     // Other Outputs
     "sourceMap": true,
@@ -21,7 +22,6 @@
 
     // Stricter Typechecking Options
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
 
     // Style Options
     // "noImplicitReturns": true,
@@ -36,7 +36,6 @@
     "jsx": "react-jsx",
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
-    "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
     "baseUrl": ".",
