@@ -33,6 +33,7 @@ import { setNodeComponentPropertyReferences } from "./tools/update/set-node-comp
 import { getPages } from "./tools/read/get-pages.js";
 import { createImage } from "./tools/create/create-image.js";
 import { addPrototypeLink } from "./tools/create/add-prototype-link.js";
+import { exportNode } from "./tools/read/export-node.js";
 
 export async function getServer(server: Server): Promise<McpServer> {
 
@@ -63,6 +64,7 @@ export async function getServer(server: Server): Promise<McpServer> {
     getNodeInfo(mcpServer, taskManager);
     getAllComponents(mcpServer, taskManager);
     getPages(mcpServer, taskManager);
+    exportNode(mcpServer, taskManager);
 
     // Update tools
     moveNode(mcpServer, taskManager);

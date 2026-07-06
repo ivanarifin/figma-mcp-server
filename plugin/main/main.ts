@@ -29,6 +29,7 @@ import { setParentId } from 'tools/update/set-parent-id';
 import { getPages } from 'tools/read/get-pages';
 import { createImage } from 'tools/create/create-image';
 import { addPrototypeLink } from 'tools/create/add-prototype-link';
+import { exportNode } from 'tools/read/export-node';
 
 function main() {
 
@@ -41,6 +42,10 @@ function main() {
         isError: true,
         content: "Tool not found"
       };
+
+      if (task.command === 'export-node') {
+        result = await safeToolProcessor<any>(exportNode)(task.args);
+      }
 
       if (task.command === 'get-selection') {
         result = await safeToolProcessor<void>(getSelection)();

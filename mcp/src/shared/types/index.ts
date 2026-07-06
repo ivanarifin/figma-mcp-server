@@ -17,6 +17,7 @@ export * from './params/create/add-prototype-link.js';
 export * from './params/read/get-node-info.js';
 export * from './params/read/get-all-components.js';
 export * from './params/read/get-pages.js';
+export * from './params/read/export-node.js';
 
 // Delete
 export * from './params/delete/delete-node.js';
