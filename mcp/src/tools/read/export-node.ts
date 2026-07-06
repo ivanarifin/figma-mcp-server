@@ -6,7 +6,6 @@ import * as path from "path";
 
 function sanitizeForAi(value: any): any {
     if (Array.isArray(value)) {
-        // The export payload stores raw image bytes as a number[]. Never stringify that into AI context.
         if (value.length > 0 && value.every((item) => typeof item === "number")) {
             return `[${value.length} bytes]`;
         }
@@ -17,11 +16,7 @@ function sanitizeForAi(value: any): any {
         const output: any = {};
         for (const [key, childValue] of Object.entries(value)) {
             if (key === "bytes" || key === "imageData" || key === "data") {
-                if (Array.isArray(childValue)) {
-                    output[key] = `[${childValue.length} bytes]`;
-                } else {
-                    output[key] = "[binary data]";
-                }
+                output[key] = Array.isArray(childValue) ? `[${childValue.length} bytes]` : "[binary data]";
             } else {
                 output[key] = sanitizeForAi(childValue);
             }
@@ -36,23 +31,48 @@ function getPayloadSize(bytes: unknown): number {
     return Array.isArray(bytes) ? bytes.length : 0;
 }
 
+function getDefaultOutputDir(): string {
+    return path.resolve(process.cwd(), "assets", "figma");
+}
+
+function sanitizeName(name: string): string {
+    return name.replace(/[^a-z0-9_-]/gi, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").toLowerCase() || "figma-export";
+}
+
+function getSafeTargetPath(outputDir: string, fileName: string, ext: string): string {
+    const resolvedOutputDir = path.resolve(outputDir);
+    const safeFileName = sanitizeName(fileName);
+    const targetPath = path.resolve(resolvedOutputDir, `${safeFileName}.${ext}`);
+
+    if (!targetPath.startsWith(resolvedOutputDir + path.sep) && targetPath !== resolvedOutputDir) {
+        throw new Error("Invalid output path");
+    }
+
+    return targetPath;
+}
+
 export function exportNode(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "export-node",
-        "Export a Figma node (frame, component, vector, etc.) as PNG, SVG, PDF, or JPG, save it to the user's Downloads directory, and return only the saved file path. Raw image bytes are never returned to AI context.",
+        "Export a specific Figma asset node (logo/icon/vector/image) to a local workspace assets folder and return only the saved file path. Defaults to ./assets/figma. Refuses to export containers/screens unless allowFrameExport=true.",
         {
             id: ExportNodeParamsSchema.shape.id,
             format: ExportNodeParamsSchema.shape.format,
             scale: ExportNodeParamsSchema.shape.scale,
+            outputDir: ExportNodeParamsSchema.shape.outputDir,
+            fileName: ExportNodeParamsSchema.shape.fileName,
+            allowFrameExport: ExportNodeParamsSchema.shape.allowFrameExport,
         },
-        async ({ id, format, scale }) => {
+        async ({ id, format, scale, outputDir, fileName, allowFrameExport }) => {
             const taskFormat = format || "PNG";
             const taskScale = Math.max(0.1, Math.min(scale || 1, 4));
+            const resolvedOutputDir = outputDir ? path.resolve(outputDir) : getDefaultOutputDir();
 
             const taskResult = await taskManager.runTask<TaskResult, any>("export-node", {
                 id,
                 format: taskFormat,
-                scale: taskScale
+                scale: taskScale,
+                allowFrameExport: allowFrameExport === true
             }, 120000);
 
             const payload = taskResult?.content;
@@ -69,16 +89,13 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
 
             if (payload && Array.isArray(payload.bytes)) {
                 try {
-                    const homeDir = process.env.HOME || process.env.USERPROFILE || "";
-                    const downloadsDir = path.join(homeDir, "Downloads");
-                    fs.mkdirSync(downloadsDir, { recursive: true });
+                    fs.mkdirSync(resolvedOutputDir, { recursive: true });
 
                     const nodeName = typeof payload.name === "string" ? payload.name : "figma-export";
-                    const safeName = nodeName.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
                     const ext = taskFormat.toLowerCase();
                     const safeId = id.replace(/[:/\\]/g, "-");
-                    const fileName = `${safeName}_${safeId}.${ext}`;
-                    const targetPath = path.join(downloadsDir, fileName);
+                    const baseFileName = fileName || `${nodeName}_${safeId}`;
+                    const targetPath = getSafeTargetPath(resolvedOutputDir, baseFileName, ext);
 
                     const buffer = Buffer.from(payload.bytes);
                     fs.writeFileSync(targetPath, buffer);
@@ -86,7 +103,13 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
                     return {
                         content: [{
                             type: "text",
-                            text: `Successfully exported node "${nodeName}" (${id}) as ${taskFormat} at ${taskScale}x scale.\nSaved to: ${targetPath}\nSize: ${buffer.length} bytes`
+                            text: [
+                                `Successfully exported Figma asset node "${nodeName}" (${id}) as ${taskFormat} at ${taskScale}x scale.`,
+                                `Saved to: ${targetPath}`,
+                                `Size: ${buffer.length} bytes`,
+                                `Use this local file path in generated code instead of embedding image bytes.`,
+                                allowFrameExport === true ? `Note: allowFrameExport=true was used; this may be a full frame/screen screenshot.` : `Frame/container export guard was enabled.`
+                            ].join("\n")
                         }],
                         isError: false
                     };
