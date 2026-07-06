@@ -29,13 +29,14 @@ export class TaskManager {
 
     public runTask<TResult, TArgs>(
         command: string,
-        args: TArgs): Promise<TResult> {
+        args: TArgs,
+        timeoutMs: number = 60000): Promise<TResult> {
         const id = generateUUID();
         const promise = new Promise((resolve, reject) => {
             this.addTask(id, command, args, resolve, reject);
             setTimeout(() => {
                 this.updateTask(id, { error: "Task timed out" }, "timed_out");
-            }, 60000);
+            }, timeoutMs);
         });
         return promise as Promise<any>;
     }
