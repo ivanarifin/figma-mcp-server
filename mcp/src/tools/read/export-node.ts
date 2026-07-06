@@ -58,10 +58,16 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
                 }
             }
 
+            // DO NOT dump raw bytes payload if it fails or returns something weird, to prevent context window crash.
+            const resultForLog = { ...result };
+            if (resultForLog.bytes) {
+                resultForLog.bytes = `[${result.bytes.length} bytes]`;
+            }
+
             return {
                 content: [{
                     type: "text",
-                    text: `Export failed or returned empty payload. Result: ${JSON.stringify(result)}`
+                    text: `Export failed or returned empty payload. Result: ${JSON.stringify(resultForLog)}`
                 }],
                 isError: true
             };
