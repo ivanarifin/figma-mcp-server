@@ -5,7 +5,7 @@ import { ToolResult } from "../tool-result";
 export async function getNodeInfo(args: GetNodeInfoParams): Promise<ToolResult> {
     const node = await figma.getNodeByIdAsync(args.id);
     if (node) {
-        const serializedNode = serializeNode(node as SceneNode);
+        const serializedNode = serializeNode(node as SceneNode, new Set(), args.recursive || false);
         return {
             isError: false,
             content: serializedNode

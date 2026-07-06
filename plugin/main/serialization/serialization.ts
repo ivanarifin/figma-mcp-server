@@ -1,4 +1,4 @@
-export function serializeNode(node: SceneNode, visited: Set<string> = new Set()): any {
+export function serializeNode(node: SceneNode, visited: Set<string> = new Set(), recursive: boolean = false): any {
 
     /*
     // ToDo: Investigate if it is possible to serialize the node with using the exportAsync method, but skipping the children and other properties that are not needed.
@@ -46,14 +46,20 @@ export function serializeNode(node: SceneNode, visited: Set<string> = new Set())
         }
 
         if (prop === 'children') {
-            // serialize only ids, names and types
-            result[prop] = (node as any)[prop].map((child: any) => {
-                return {
-                    id: child.id,
-                    name: child.name,
-                    type: child.type,
-                };
-            });
+            if (recursive) {
+                result[prop] = (node as any)[prop].map((child: any) => {
+                    return serializeNode(child, visited, recursive);
+                });
+            } else {
+                // serialize only ids, names and types
+                result[prop] = (node as any)[prop].map((child: any) => {
+                    return {
+                        id: child.id,
+                        name: child.name,
+                        type: child.type,
+                    };
+                });
+            }
             return;
         }
 
