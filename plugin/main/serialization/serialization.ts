@@ -79,7 +79,7 @@ export function serializeNode(node: SceneNode, visited: Set<string> = new Set(),
                 if (Array.isArray(value)) {
                     result[prop] = value.map((item: any) => {
                         if (item && typeof item === 'object' && 'id' in item) {
-                            return serializeNode(item, visited);
+                            return serializeNode(item, visited, recursive);
                         }
                         return item;
                     });
@@ -102,6 +102,24 @@ export function serializeNode(node: SceneNode, visited: Set<string> = new Set(),
             void error; // Prevent optimization of catch parameter
         }
     });
+
+    // Explicitly add resolved values for Text nodes to prevent font missing/mixed value issues
+    if (node.type === "TEXT") {
+        const textNode = node as TextNode;
+        result["characters"] = textNode.characters;
+        try {
+            result["resolvedFontName"] = textNode.fontName;
+            result["resolvedFontSize"] = textNode.fontSize;
+            result["resolvedLineHeight"] = textNode.lineHeight;
+            result["resolvedLetterSpacing"] = textNode.letterSpacing;
+            result["resolvedTextAlignHorizontal"] = textNode.textAlignHorizontal;
+            result["resolvedTextAlignVertical"] = textNode.textAlignVertical;
+            result["resolvedTextCase"] = textNode.textCase;
+            result["resolvedTextDecoration"] = textNode.textDecoration;
+        } catch (e) {
+            // ignore if mixed properties exist
+        }
+    }
 
     return result;
 }
