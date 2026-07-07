@@ -10,7 +10,17 @@ export class Orchestrator {
         // Subscribe to task added events
         // Send start-task message via web socket to the Figma plugin
         this.taskManager.onTaskAdded((task) => {
-            this.socketManager.sendMessage('start-task', task);
+            const sent = this.socketManager.sendMessage('start-task', task);
+            if (!sent) {
+                this.taskManager.updateTask(
+                    task.id,
+                    {
+                        error: "Figma plugin is not connected to MCP server. Open/reopen the Figma MCP Server plugin window, wait until it says Connected, then retry the tool call.",
+                        command: task.command,
+                    },
+                    'failed'
+                );
+            }
         });
 
 
