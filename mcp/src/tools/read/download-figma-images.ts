@@ -7,20 +7,9 @@ import * as fs from "fs";
 import * as path from "path";
 
 const DownloadFigmaImagesParamsSchema = z.object({
-    fileKey: z.string().optional().describe("Accepted for Framelink/official compatibility. Ignored in local websocket mode."),
-    nodes: z.array(z.object({
-        nodeId: z.string().describe("Figma node ID to export, e.g. 189:3380 or URL style 189-3380."),
-        imageRef: z.string().optional().describe("Accepted for compatibility. Ignored in local websocket mode; nodeId is exported directly."),
-        gifRef: z.string().optional().describe("Accepted for compatibility. GIF export is not supported in local plugin mode."),
-        fileName: z.string().regex(/^[a-zA-Z0-9_.-]+\.(png|svg|jpg|jpeg|pdf)$/).describe("Local file name, including extension."),
-        needsCropping: z.boolean().optional(),
-        cropTransform: z.array(z.array(z.number())).optional(),
-        requiresImageDimensions: z.boolean().optional(),
-        filenameSuffix: z.string().regex(/^[a-zA-Z0-9_-]+$/).optional(),
-    })).length(1, "download_figma_images supports exactly one image per request in local websocket mode. Call this tool repeatedly for multiple assets.").describe("Exactly one asset node to export. Use specific logo/icon/image child node, not parent screens. For multiple assets, call this tool once per asset."),
-    pngScale: z.number().positive().max(4).default(2).optional(),
-    localPath: z.string().default("assets").optional().describe("Directory to save images, relative to current workspace by default. Defaults to assets; if the project has a more specific folder, pass it explicitly, e.g. src/assets, public/images, or app/assets."),
-    allowFrameExport: z.boolean().default(false).optional().describe("Set true only if intentionally downloading full screen/frame screenshots."),
+    nodeId: z.string().describe("Required Figma asset node ID. Accepts either 123:456 or URL style 123-456. Must be a specific asset child node, not a parent screen/frame."),
+    fileName: z.string().regex(/^[a-zA-Z0-9_.-]+\.(png|svg|jpg|jpeg|pdf)$/).describe("Required local file name, including extension. The extension controls export format."),
+    localPath: z.string().default("assets").optional().describe("Optional workspace-relative folder. Defaults to assets. Use e.g. src/assets, public/images, app/assets, or assets/onboarding if appropriate."),
 });
 
 type DownloadFigmaImagesParams = z.infer<typeof DownloadFigmaImagesParamsSchema>;
@@ -70,55 +59,45 @@ function summarizeFailure(value: any): string {
 export function downloadFigmaImages(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "download_figma_images",
-        "Official/Framelink-compatible local tool: export exactly ONE SVG/PNG/JPG/PDF asset node from the currently open Figma plugin into a workspace-relative directory. IMPORTANT: local websocket mode intentionally supports one image per request only; for multiple assets, call download_figma_images repeatedly, one node at a time. Defaults to ./assets; if the project has a more specific asset folder (src/assets, public/images, app/assets), pass localPath explicitly. Uses the stable rendered export path (same as export-node), not the original image hash path, because imageHash bytes can hang in Figma plugin runtime. Use IDs from get_figma_data/get-node-info exportableAssets; do not use parent screen/frame IDs unless allowFrameExport=true.",
+        "Download exactly ONE Figma asset node to the local workspace. Required params only: nodeId and fileName. Optional: localPath. Use specific child asset IDs from get_figma_data exportableAssets; do not pass parent screen/frame IDs. For multiple assets, call this tool repeatedly one at a time.",
         DownloadFigmaImagesParamsSchema.shape,
         async (params: DownloadFigmaImagesParams) => {
             try {
-                const { nodes, pngScale = 2, localPath = "assets", allowFrameExport = false } = DownloadFigmaImagesParamsSchema.parse(params);
-                logEvent('download_figma_images.start', { nodeCount: nodes.length, localPath, pngScale, allowFrameExport });
-                const request = nodes[0];
-                if (!request) {
-                    return {
-                        content: [{
-                            type: "text" as const,
-                            text: "download_figma_images requires exactly one node. For multiple assets, call this tool repeatedly, one asset per request."
-                        }],
-                        isError: true,
-                    };
-                }
+                const { nodeId: rawNodeId, fileName: rawFileName, localPath = "assets" } = DownloadFigmaImagesParamsSchema.parse(params);
+                logEvent('download_figma_images.start', { nodeId: rawNodeId, fileName: rawFileName, localPath });
 
                 const outputDir = resolveLocalPath(localPath);
                 fs.mkdirSync(outputDir, { recursive: true });
 
-                const nodeId = request.nodeId.replace(/-/g, ":");
-                const format = formatFromFileName(request.fileName);
-                const scale = format === "PNG" || format === "JPG" ? Math.max(0.1, Math.min(pngScale, 4)) : 1;
-                logEvent('download_figma_images.export_task_start', { nodeId, fileName: request.fileName, format, scale, timeoutMs: getImageDownloadTimeoutMs() });
+                const nodeId = rawNodeId.replace(/-/g, ":");
+                const fileName = safeFileName(rawFileName);
+                const format = formatFromFileName(fileName);
+                const scale = 1;
+                logEvent('download_figma_images.export_task_start', { nodeId, fileName, format, scale, timeoutMs: getImageDownloadTimeoutMs() });
 
                 const taskResult = await taskManager.runTask<TaskResult, any>("export-node", {
                     id: nodeId,
                     format,
                     scale,
-                    allowFrameExport,
+                    allowFrameExport: false,
                 }, getImageDownloadTimeoutMs());
 
-                logEvent('download_figma_images.export_task_done', { nodeId, fileName: request.fileName, isError: taskResult?.isError, contentKeys: taskResult?.content && typeof taskResult.content === 'object' ? Object.keys(taskResult.content) : undefined });
+                logEvent('download_figma_images.export_task_done', { nodeId, fileName, isError: taskResult?.isError, contentKeys: taskResult?.content && typeof taskResult.content === 'object' ? Object.keys(taskResult.content) : undefined });
                 const buffer = payloadToBuffer(taskResult?.content);
                 if (taskResult?.isError || !buffer) {
                     return {
                         content: [{
                             type: "text" as const,
-                            text: `Failed to download ${request.fileName}: ${summarizeFailure(taskResult?.content ?? taskResult)}`
+                            text: `Failed to download ${fileName}: ${summarizeFailure(taskResult?.content ?? taskResult)}`
                         }],
                         isError: true,
                     };
                 }
 
-                const fileName = safeFileName(request.fileName);
                 const targetPath = path.resolve(outputDir, fileName);
                 if (!targetPath.startsWith(outputDir + path.sep)) {
                     return {
-                        content: [{ type: "text" as const, text: `Failed to download ${request.fileName}: invalid file path` }],
+                        content: [{ type: "text" as const, text: `Failed to download ${fileName}: invalid file path` }],
                         isError: true,
                     };
                 }
@@ -131,7 +110,7 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
                 return {
                     content: [{
                         type: "text" as const,
-                        text: `Downloaded 1/1 Figma asset to \`${outputDir}\`:\n- ${fileName}: ${buffer.length} bytes${source} -> ${targetPath}\nFor multiple assets, call download_figma_images again for the next asset.`
+                        text: `Downloaded Figma asset to \`${outputDir}\`:\n- ${fileName}: ${buffer.length} bytes${source} -> ${targetPath}`
                     }],
                     isError: false,
                 };
@@ -139,7 +118,7 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
                 return {
                     content: [{
                         type: "text" as const,
-                        text: `Failed to download Figma image: ${error instanceof Error ? error.message : String(error)}. If you passed multiple nodes, retry with exactly one node per request.`
+                        text: `Failed to download Figma image: ${error instanceof Error ? error.message : String(error)}. Required params: nodeId and fileName. Optional param: localPath.`
                     }],
                     isError: true,
                 };
