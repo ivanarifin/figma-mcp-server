@@ -6,6 +6,10 @@ import * as fs from "fs";
 import * as path from "path";
 
 function sanitizeForAi(value: any): any {
+    if (typeof value === "string" && value.length > 1024 && /^[A-Za-z0-9+/=]+$/.test(value)) {
+        return `[base64 ${value.length} chars]`;
+    }
+
     if (Array.isArray(value)) {
         if (value.length > 0 && value.every((item) => typeof item === "number")) {
             return `[${value.length} bytes]`;
@@ -18,6 +22,8 @@ function sanitizeForAi(value: any): any {
         for (const [key, childValue] of Object.entries(value)) {
             if (key === "bytes" || key === "imageData" || key === "data") {
                 output[key] = Array.isArray(childValue) ? `[${childValue.length} bytes]` : "[binary data]";
+            } else if (key === "bytesBase64") {
+                output[key] = typeof childValue === "string" ? `[base64 ${childValue.length} chars]` : "[base64 data]";
             } else {
                 output[key] = sanitizeForAi(childValue);
             }
@@ -28,8 +34,24 @@ function sanitizeForAi(value: any): any {
     return value;
 }
 
-function getPayloadSize(bytes: unknown): number {
-    return Array.isArray(bytes) ? bytes.length : 0;
+function getPayloadSize(payload: any): number {
+    if (typeof payload?.bytesBase64 === "string") {
+        return Buffer.byteLength(payload.bytesBase64, "base64");
+    }
+    if (Array.isArray(payload?.bytes)) {
+        return payload.bytes.length;
+    }
+    return 0;
+}
+
+function payloadToBuffer(payload: any): Buffer | undefined {
+    if (typeof payload?.bytesBase64 === "string") {
+        return Buffer.from(payload.bytesBase64, "base64");
+    }
+    if (Array.isArray(payload?.bytes)) {
+        return Buffer.from(payload.bytes);
+    }
+    return undefined;
 }
 
 function getDefaultOutputDir(): string {
@@ -55,7 +77,7 @@ function getSafeTargetPath(outputDir: string, fileName: string, ext: string): st
 export function exportNode(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "export-node",
-        "Export a specific Figma asset node (logo/icon/vector/image) to a local workspace assets folder and return only the saved file path. Defaults to ./assets. If the project has a more specific asset folder (e.g. src/assets, public/images, app/assets), pass outputDir explicitly. Refuses to export containers/screens unless allowFrameExport=true.",
+        "Export a specific Figma asset node (logo/icon/vector/image) to a local workspace assets folder and return only the saved file path. Defaults to ./assets. If the project has a more specific asset folder (e.g. src/assets, public/images, app/assets), pass outputDir explicitly. Refuses to export containers/screens unless allowFrameExport=true. Uses original image fill bytes when possible instead of rendering a screenshot.",
         {
             id: ExportNodeParamsSchema.shape.id,
             format: ExportNodeParamsSchema.shape.format,
@@ -88,7 +110,8 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
                 };
             }
 
-            if (payload && Array.isArray(payload.bytes)) {
+            const buffer = payloadToBuffer(payload);
+            if (payload && buffer) {
                 try {
                     fs.mkdirSync(resolvedOutputDir, { recursive: true });
 
@@ -98,7 +121,6 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
                     const baseFileName = fileName || `${nodeName}_${safeId}`;
                     const targetPath = getSafeTargetPath(resolvedOutputDir, baseFileName, ext);
 
-                    const buffer = Buffer.from(payload.bytes);
                     fs.writeFileSync(targetPath, buffer);
 
                     return {
@@ -108,9 +130,10 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
                                 `Successfully exported Figma asset node "${nodeName}" (${id}) as ${taskFormat} at ${taskScale}x scale.`,
                                 `Saved to: ${targetPath}`,
                                 `Size: ${buffer.length} bytes`,
+                                payload.source ? `Source: ${payload.source}` : undefined,
                                 `Use this local file path in generated code instead of embedding image bytes.`,
                                 allowFrameExport === true ? `Note: allowFrameExport=true was used; this may be a full frame/screen screenshot.` : `Frame/container export guard was enabled.`
-                            ].join("\n")
+                            ].filter(Boolean).join("\n")
                         }],
                         isError: false
                     };
@@ -118,7 +141,7 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
                     return {
                         content: [{
                             type: "text",
-                            text: `Failed to save exported file to disk: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}. Payload size: ${getPayloadSize(payload.bytes)} bytes`
+                            text: `Failed to save exported file to disk: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}. Payload size: ${getPayloadSize(payload)} bytes`
                         }],
                         isError: true
                     };

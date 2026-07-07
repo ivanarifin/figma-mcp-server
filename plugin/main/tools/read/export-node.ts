@@ -10,9 +10,37 @@ const CONTAINER_TYPES = new Set<string>([
     "SECTION",
 ]);
 
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+}
+
+function getFirstVisibleImagePaint(node: SceneNode): ImagePaint | undefined {
+    if (!("fills" in node)) {
+        return undefined;
+    }
+
+    const fills = node.fills;
+    if (fills === figma.mixed || !Array.isArray(fills)) {
+        return undefined;
+    }
+
+    return fills.find((paint): paint is ImagePaint => (
+        paint.type === "IMAGE" &&
+        paint.visible !== false &&
+        typeof paint.imageHash === "string" &&
+        paint.imageHash.length > 0
+    ));
+}
+
 export async function exportNode(args: ExportNodeParams): Promise<ToolResult> {
     try {
-        const node = await figma.getNodeByIdAsync(args.id);
+        const node = await figma.getNodeByIdAsync(args.id.replace(/-/g, ":"));
         if (!node) {
             return {
                 isError: true,
@@ -41,11 +69,38 @@ export async function exportNode(args: ExportNodeParams): Promise<ToolResult> {
             };
         }
 
-        const format = args.format || "PNG";
+        const requestedFormat = args.format || "PNG";
         const scale = Math.max(0.1, Math.min(args.scale || 1, 4));
+        const imagePaint = getFirstVisibleImagePaint(sceneNode);
+
+        // Fast path: if this node is an IMAGE fill and the caller wants a bitmap, download the original image bytes
+        // instead of rendering a screenshot of the node. This is much faster and avoids status bars/frame chrome.
+        if (imagePaint && (requestedFormat === "PNG" || requestedFormat === "JPG")) {
+            const image = figma.getImageByHash(imagePaint.imageHash);
+            if (image) {
+                const bytes = await image.getBytesAsync();
+                return {
+                    isError: false,
+                    content: {
+                        id: sceneNode.id,
+                        name: sceneNode.name,
+                        type: sceneNode.type,
+                        width,
+                        height,
+                        childCount,
+                        format: requestedFormat,
+                        scale,
+                        source: "image-fill-original",
+                        imageHash: imagePaint.imageHash,
+                        byteLength: bytes.length,
+                        bytesBase64: uint8ArrayToBase64(bytes)
+                    }
+                };
+            }
+        }
 
         const exportSettings: ExportSettings = {
-            format: format as any,
+            format: requestedFormat as any,
             suffix: "",
             constraint: {
                 type: "SCALE",
@@ -54,7 +109,6 @@ export async function exportNode(args: ExportNodeParams): Promise<ToolResult> {
         };
 
         const uint8array = await sceneNode.exportAsync(exportSettings);
-        const byteArray = Array.from(uint8array);
 
         return {
             isError: false,
@@ -65,9 +119,11 @@ export async function exportNode(args: ExportNodeParams): Promise<ToolResult> {
                 width,
                 height,
                 childCount,
-                format: format,
-                scale: scale,
-                bytes: byteArray
+                format: requestedFormat,
+                scale,
+                source: "rendered-node",
+                byteLength: uint8array.length,
+                bytesBase64: uint8ArrayToBase64(uint8array)
             }
         };
     } catch (error) {

@@ -29,7 +29,6 @@ function resolveLocalPath(localPath?: string): string {
     const requested = localPath || "assets";
     const resolved = path.isAbsolute(requested) ? path.resolve(requested) : path.resolve(base, requested);
 
-    // Keep writes inside the current workspace unless the caller gives an explicit absolute path under cwd.
     if (!resolved.startsWith(base + path.sep) && resolved !== base) {
         throw new Error(`Invalid localPath: ${requested}. Use a path inside the current workspace, e.g. assets, src/assets, public/images, or app/assets.`);
     }
@@ -48,10 +47,29 @@ function safeFileName(fileName: string): string {
     return path.basename(fileName).replace(/[^a-zA-Z0-9_.-]/g, "_");
 }
 
+function payloadToBuffer(payload: any): Buffer | undefined {
+    if (typeof payload?.bytesBase64 === "string") {
+        return Buffer.from(payload.bytesBase64, "base64");
+    }
+    if (Array.isArray(payload?.bytes)) {
+        return Buffer.from(payload.bytes);
+    }
+    return undefined;
+}
+
+function summarizeFailure(value: any): string {
+    if (!value) return "unknown error";
+    if (typeof value === "string") return value;
+    const clone = { ...value };
+    if (clone.bytesBase64) clone.bytesBase64 = `[base64 ${clone.bytesBase64.length} chars]`;
+    if (clone.bytes) clone.bytes = Array.isArray(clone.bytes) ? `[${clone.bytes.length} bytes]` : "[binary data]";
+    return JSON.stringify(clone);
+}
+
 export function downloadFigmaImages(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "download_figma_images",
-        "Official/Framelink-compatible local tool: export SVG/PNG/JPG/PDF asset nodes from the currently open Figma plugin into a workspace-relative directory. Defaults to ./assets; if the project has a more specific asset folder (src/assets, public/images, app/assets), pass localPath explicitly. Use IDs from get_figma_data/get-node-info exportableAssets; do not use parent screen/frame IDs unless allowFrameExport=true.",
+        "Official/Framelink-compatible local tool: export SVG/PNG/JPG/PDF asset nodes from the currently open Figma plugin into a workspace-relative directory. Defaults to ./assets; if the project has a more specific asset folder (src/assets, public/images, app/assets), pass localPath explicitly. Uses original image fill bytes when possible. Use IDs from get_figma_data/get-node-info exportableAssets; do not use parent screen/frame IDs unless allowFrameExport=true.",
         DownloadFigmaImagesParamsSchema.shape,
         async (params: DownloadFigmaImagesParams) => {
             try {
@@ -74,8 +92,9 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
                         allowFrameExport,
                     }, getExportTaskTimeoutMs());
 
-                    if (taskResult?.isError || !taskResult?.content?.bytes) {
-                        results.push(`- ${request.fileName}: FAILED ${JSON.stringify(taskResult?.content ?? taskResult)}`);
+                    const buffer = payloadToBuffer(taskResult?.content);
+                    if (taskResult?.isError || !buffer) {
+                        results.push(`- ${request.fileName}: FAILED ${summarizeFailure(taskResult?.content ?? taskResult)}`);
                         continue;
                     }
 
@@ -86,10 +105,10 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
                         continue;
                     }
 
-                    const buffer = Buffer.from(taskResult.content.bytes);
                     fs.writeFileSync(targetPath, buffer);
                     successCount++;
-                    results.push(`- ${fileName}: ${buffer.length} bytes -> ${targetPath}`);
+                    const source = taskResult.content?.source ? ` | source=${taskResult.content.source}` : "";
+                    results.push(`- ${fileName}: ${buffer.length} bytes${source} -> ${targetPath}`);
                 }
 
                 return {

@@ -4,6 +4,10 @@ import type { TaskResult } from "src/task-manager";
 const MAX_TEXT_LENGTH = 180000;
 
 function sanitizeForAi(value: any): any {
+    if (typeof value === "string" && value.length > 1024 && /^[A-Za-z0-9+/=]+$/.test(value)) {
+        return `[base64 ${value.length} chars]`;
+    }
+
     if (Array.isArray(value)) {
         if (value.length > 0 && value.every((item) => typeof item === "number")) {
             return `[${value.length} bytes]`;
@@ -16,6 +20,8 @@ function sanitizeForAi(value: any): any {
         for (const [key, childValue] of Object.entries(value)) {
             if (key === "bytes" || key === "imageData" || key === "data") {
                 output[key] = Array.isArray(childValue) ? `[${childValue.length} bytes]` : "[binary data]";
+            } else if (key === "bytesBase64") {
+                output[key] = typeof childValue === "string" ? `[base64 ${childValue.length} chars]` : "[base64 data]";
             } else {
                 output[key] = sanitizeForAi(childValue);
             }
