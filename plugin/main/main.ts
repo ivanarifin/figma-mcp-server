@@ -36,7 +36,6 @@ function main() {
   on<StartTaskHandler>('START_TASK', async function (task: StartTaskHandler) {
     try {
       console.log('start-task', { taskId: task.taskId, command: task.command })
-      await figma.loadAllPagesAsync();
 
       let result: ToolResult = {
         isError: true,

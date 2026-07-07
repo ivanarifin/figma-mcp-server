@@ -33,7 +33,8 @@ function collectExportableAssets(node: any, assets: any[] = []): any[] {
 }
 
 export async function getNodeInfo(args: GetNodeInfoParams): Promise<ToolResult> {
-    const node = await figma.getNodeByIdAsync(args.id);
+    const normalizedId = args.id.replace(/-/g, ":");
+    const node = await figma.getNodeByIdAsync(normalizedId);
     if (node) {
         // Since schema default is true, if args.recursive is undefined (not passed), we default to true.
         const shouldBeRecursive = args.recursive !== false;
@@ -51,7 +52,7 @@ export async function getNodeInfo(args: GetNodeInfoParams): Promise<ToolResult> 
                     "Avoid exporting screen/container frames as assets. export-node blocks that by default unless allowFrameExport=true.",
                     "If childrenTruncated=true, call get-node-info on the relevant child id or increase maxDepth for smaller nodes."
                 ],
-                requestedNodeId: args.id,
+                requestedNodeId: normalizedId,
                 recursive: shouldBeRecursive,
                 maxDepth,
                 exportableAssets,
