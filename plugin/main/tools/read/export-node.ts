@@ -20,6 +20,27 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
     return btoa(binary);
 }
 
+function isScreenLikeContainer(node: SceneNode, width: number, height: number, childCount: number): boolean {
+    if (!CONTAINER_TYPES.has(node.type) || childCount === 0) {
+        return false;
+    }
+
+    // Sections are organizational/page-level containers, not assets.
+    if (node.type === "SECTION") {
+        return true;
+    }
+
+    const parentType = node.parent?.type;
+    const isTopLevelCanvasNode = parentType === "PAGE";
+    const isMobileScreenSized = width >= 300 && height >= 640;
+    const isDesktopOrTabletScreenSized = width >= 640 && height >= 480;
+    const isVeryLargeArtwork = width >= 900 || height >= 900;
+
+    // Only block containers that look like full screens/artboards. Smaller grouped artwork,
+    // logos, cards, wordmarks, and hero art frames should remain exportable.
+    return isTopLevelCanvasNode && (isMobileScreenSized || isDesktopOrTabletScreenSized || isVeryLargeArtwork);
+}
+
 export async function exportNode(args: ExportNodeParams): Promise<ToolResult> {
     try {
         const node = await figma.getNodeByIdAsync(args.id.replace(/-/g, ":"));
@@ -42,12 +63,12 @@ export async function exportNode(args: ExportNodeParams): Promise<ToolResult> {
         const width = "width" in sceneNode ? sceneNode.width : 0;
         const height = "height" in sceneNode ? sceneNode.height : 0;
         const childCount = "children" in sceneNode ? sceneNode.children.length : 0;
-        const isLikelyScreenOrContainer = CONTAINER_TYPES.has(sceneNode.type) && childCount > 0;
+        const isBlockedScreenContainer = isScreenLikeContainer(sceneNode, width, height, childCount);
 
-        if (isLikelyScreenOrContainer && args.allowFrameExport !== true) {
+        if (isBlockedScreenContainer && args.allowFrameExport !== true) {
             return {
                 isError: true,
-                content: `Refusing to export ${sceneNode.type} "${sceneNode.name}" (${sceneNode.id}) because it looks like a container/screen (${Math.round(width)}x${Math.round(height)}, ${childCount} children). Select the actual logo/icon/vector/image node, or call export-node with allowFrameExport=true if you intentionally want a full frame screenshot.`
+                content: `Refusing to export ${sceneNode.type} "${sceneNode.name}" (${sceneNode.id}) because it looks like a top-level screen/artboard (${Math.round(width)}x${Math.round(height)}, ${childCount} children). Select a child artwork/logo/card node, or intentionally use allowFrameExport=true for full-screen screenshots.`
             };
         }
 
