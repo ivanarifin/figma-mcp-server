@@ -35,6 +35,7 @@ import { createImage } from "./tools/create/create-image.js";
 import { addPrototypeLink } from "./tools/create/add-prototype-link.js";
 import { getFigmaData } from "./tools/read/get-figma-data.js";
 import { downloadFigmaImages } from "./tools/read/download-figma-images.js";
+import { getFigmaFonts } from "./tools/read/get-figma-fonts.js";
 
 export async function getServer(server: Server): Promise<McpServer> {
 
@@ -67,6 +68,7 @@ export async function getServer(server: Server): Promise<McpServer> {
     getPages(mcpServer, taskManager);
     getFigmaData(mcpServer, taskManager);
     downloadFigmaImages(mcpServer, taskManager);
+    getFigmaFonts(mcpServer, taskManager);
 
     // Update tools
     moveNode(mcpServer, taskManager);

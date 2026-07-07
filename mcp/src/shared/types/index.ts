@@ -18,6 +18,7 @@ export * from './params/read/get-node-info.js';
 export * from './params/read/get-all-components.js';
 export * from './params/read/get-pages.js';
 export * from './params/read/export-node.js';
+export * from './params/read/get-figma-fonts.js';
 
 // Delete
 export * from './params/delete/delete-node.js';
