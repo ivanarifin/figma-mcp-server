@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import type { TaskManager, TaskResult } from "../../task-manager.js";
-import { getExportTaskTimeoutMs } from "../../timeout-config.js";
+import { getImageDownloadTimeoutMs } from "../../timeout-config.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -69,7 +69,7 @@ function summarizeFailure(value: any): string {
 export function downloadFigmaImages(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "download_figma_images",
-        "Official/Framelink-compatible local tool: export exactly ONE SVG/PNG/JPG/PDF asset node from the currently open Figma plugin into a workspace-relative directory. IMPORTANT: local websocket mode intentionally supports one image per request only; for multiple assets, call download_figma_images repeatedly, one node at a time. Defaults to ./assets; if the project has a more specific asset folder (src/assets, public/images, app/assets), pass localPath explicitly. Uses original image fill bytes when possible. Use IDs from get_figma_data/get-node-info exportableAssets; do not use parent screen/frame IDs unless allowFrameExport=true.",
+        "Official/Framelink-compatible local tool: export exactly ONE SVG/PNG/JPG/PDF asset node from the currently open Figma plugin into a workspace-relative directory. IMPORTANT: local websocket mode intentionally supports one image per request only; for multiple assets, call download_figma_images repeatedly, one node at a time. Defaults to ./assets; if the project has a more specific asset folder (src/assets, public/images, app/assets), pass localPath explicitly. Uses the stable rendered export path (same as export-node), not the original image hash path, because imageHash bytes can hang in Figma plugin runtime. Use IDs from get_figma_data/get-node-info exportableAssets; do not use parent screen/frame IDs unless allowFrameExport=true.",
         DownloadFigmaImagesParamsSchema.shape,
         async (params: DownloadFigmaImagesParams) => {
             try {
@@ -97,7 +97,7 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
                     format,
                     scale,
                     allowFrameExport,
-                }, getExportTaskTimeoutMs());
+                }, getImageDownloadTimeoutMs());
 
                 const buffer = payloadToBuffer(taskResult?.content);
                 if (taskResult?.isError || !buffer) {

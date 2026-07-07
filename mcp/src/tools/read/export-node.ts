@@ -77,7 +77,7 @@ function getSafeTargetPath(outputDir: string, fileName: string, ext: string): st
 export function exportNode(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "export-node",
-        "Export a specific Figma asset node (logo/icon/vector/image) to a local workspace assets folder and return only the saved file path. Defaults to ./assets. If the project has a more specific asset folder (e.g. src/assets, public/images, app/assets), pass outputDir explicitly. Refuses to export containers/screens unless allowFrameExport=true. Uses original image fill bytes when possible instead of rendering a screenshot.",
+        "Export a specific Figma asset node (logo/icon/vector/image) to a local workspace assets folder and return only the saved file path. Defaults to ./assets. If the project has a more specific asset folder (e.g. src/assets, public/images, app/assets), pass outputDir explicitly. Refuses to export containers/screens unless allowFrameExport=true. Uses the stable Figma rendered export path.",
         {
             id: ExportNodeParamsSchema.shape.id,
             format: ExportNodeParamsSchema.shape.format,

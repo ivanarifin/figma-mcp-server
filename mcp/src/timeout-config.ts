@@ -26,3 +26,7 @@ export function getReadTaskTimeoutMs(): number {
 export function getExportTaskTimeoutMs(): number {
     return parseTimeoutMs(process.env.FIGMA_MCP_EXPORT_TIMEOUT_MS, getDefaultTaskTimeoutMs());
 }
+
+export function getImageDownloadTimeoutMs(): number {
+    return parseTimeoutMs(process.env.FIGMA_MCP_IMAGE_DOWNLOAD_TIMEOUT_MS, 120000);
+}
