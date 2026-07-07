@@ -16,7 +16,7 @@ const DownloadFigmaImagesParamsSchema = z.object({
         cropTransform: z.array(z.array(z.number())).optional(),
         requiresImageDimensions: z.boolean().optional(),
         filenameSuffix: z.string().regex(/^[a-zA-Z0-9_-]+$/).optional(),
-    })).describe("Asset nodes to export. Use specific logo/icon/image child nodes, not parent screens."),
+    })).length(1, "download_figma_images supports exactly one image per request in local websocket mode. Call this tool repeatedly for multiple assets.").describe("Exactly one asset node to export. Use specific logo/icon/image child node, not parent screens. For multiple assets, call this tool once per asset."),
     pngScale: z.number().positive().max(4).default(2).optional(),
     localPath: z.string().default("assets").optional().describe("Directory to save images, relative to current workspace by default. Defaults to assets; if the project has a more specific folder, pass it explicitly, e.g. src/assets, public/images, or app/assets."),
     allowFrameExport: z.boolean().default(false).optional().describe("Set true only if intentionally downloading full screen/frame screenshots."),
@@ -69,60 +69,71 @@ function summarizeFailure(value: any): string {
 export function downloadFigmaImages(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "download_figma_images",
-        "Official/Framelink-compatible local tool: export SVG/PNG/JPG/PDF asset nodes from the currently open Figma plugin into a workspace-relative directory. Defaults to ./assets; if the project has a more specific asset folder (src/assets, public/images, app/assets), pass localPath explicitly. Uses original image fill bytes when possible. Use IDs from get_figma_data/get-node-info exportableAssets; do not use parent screen/frame IDs unless allowFrameExport=true.",
+        "Official/Framelink-compatible local tool: export exactly ONE SVG/PNG/JPG/PDF asset node from the currently open Figma plugin into a workspace-relative directory. IMPORTANT: local websocket mode intentionally supports one image per request only; for multiple assets, call download_figma_images repeatedly, one node at a time. Defaults to ./assets; if the project has a more specific asset folder (src/assets, public/images, app/assets), pass localPath explicitly. Uses original image fill bytes when possible. Use IDs from get_figma_data/get-node-info exportableAssets; do not use parent screen/frame IDs unless allowFrameExport=true.",
         DownloadFigmaImagesParamsSchema.shape,
         async (params: DownloadFigmaImagesParams) => {
             try {
                 const { nodes, pngScale = 2, localPath = "assets", allowFrameExport = false } = DownloadFigmaImagesParamsSchema.parse(params);
+                const request = nodes[0];
+                if (!request) {
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: "download_figma_images requires exactly one node. For multiple assets, call this tool repeatedly, one asset per request."
+                        }],
+                        isError: true,
+                    };
+                }
+
                 const outputDir = resolveLocalPath(localPath);
                 fs.mkdirSync(outputDir, { recursive: true });
 
-                const results: string[] = [];
-                let successCount = 0;
+                const nodeId = request.nodeId.replace(/-/g, ":");
+                const format = formatFromFileName(request.fileName);
+                const scale = format === "PNG" || format === "JPG" ? Math.max(0.1, Math.min(pngScale, 4)) : 1;
 
-                for (const request of nodes) {
-                    const nodeId = request.nodeId.replace(/-/g, ":");
-                    const format = formatFromFileName(request.fileName);
-                    const scale = format === "PNG" || format === "JPG" ? Math.max(0.1, Math.min(pngScale, 4)) : 1;
+                const taskResult = await taskManager.runTask<TaskResult, any>("export-node", {
+                    id: nodeId,
+                    format,
+                    scale,
+                    allowFrameExport,
+                }, getExportTaskTimeoutMs());
 
-                    const taskResult = await taskManager.runTask<TaskResult, any>("export-node", {
-                        id: nodeId,
-                        format,
-                        scale,
-                        allowFrameExport,
-                    }, getExportTaskTimeoutMs());
-
-                    const buffer = payloadToBuffer(taskResult?.content);
-                    if (taskResult?.isError || !buffer) {
-                        results.push(`- ${request.fileName}: FAILED ${summarizeFailure(taskResult?.content ?? taskResult)}`);
-                        continue;
-                    }
-
-                    const fileName = safeFileName(request.fileName);
-                    const targetPath = path.resolve(outputDir, fileName);
-                    if (!targetPath.startsWith(outputDir + path.sep)) {
-                        results.push(`- ${request.fileName}: FAILED invalid file path`);
-                        continue;
-                    }
-
-                    fs.writeFileSync(targetPath, buffer);
-                    successCount++;
-                    const source = taskResult.content?.source ? ` | source=${taskResult.content.source}` : "";
-                    results.push(`- ${fileName}: ${buffer.length} bytes${source} -> ${targetPath}`);
+                const buffer = payloadToBuffer(taskResult?.content);
+                if (taskResult?.isError || !buffer) {
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: `Failed to download ${request.fileName}: ${summarizeFailure(taskResult?.content ?? taskResult)}`
+                        }],
+                        isError: true,
+                    };
                 }
+
+                const fileName = safeFileName(request.fileName);
+                const targetPath = path.resolve(outputDir, fileName);
+                if (!targetPath.startsWith(outputDir + path.sep)) {
+                    return {
+                        content: [{ type: "text" as const, text: `Failed to download ${request.fileName}: invalid file path` }],
+                        isError: true,
+                    };
+                }
+
+                fs.writeFileSync(targetPath, buffer);
+                const source = taskResult.content?.source ? ` | source=${taskResult.content.source}` : "";
 
                 return {
                     content: [{
                         type: "text" as const,
-                        text: `Downloaded ${successCount}/${nodes.length} Figma asset(s) to \`${outputDir}\`:\n${results.join("\n")}`
+                        text: `Downloaded 1/1 Figma asset to \`${outputDir}\`:\n- ${fileName}: ${buffer.length} bytes${source} -> ${targetPath}\nFor multiple assets, call download_figma_images again for the next asset.`
                     }],
-                    isError: successCount === 0 && nodes.length > 0,
+                    isError: false,
                 };
             } catch (error) {
                 return {
                     content: [{
                         type: "text" as const,
-                        text: `Failed to download Figma images: ${error instanceof Error ? error.message : String(error)}`
+                        text: `Failed to download Figma image: ${error instanceof Error ? error.message : String(error)}. If you passed multiple nodes, retry with exactly one node per request.`
                     }],
                     isError: true,
                 };
