@@ -33,7 +33,7 @@ function getPayloadSize(bytes: unknown): number {
 }
 
 function getDefaultOutputDir(): string {
-    return path.resolve(process.cwd(), "assets", "figma");
+    return path.resolve(process.cwd(), "assets");
 }
 
 function sanitizeName(name: string): string {
@@ -55,7 +55,7 @@ function getSafeTargetPath(outputDir: string, fileName: string, ext: string): st
 export function exportNode(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "export-node",
-        "Export a specific Figma asset node (logo/icon/vector/image) to a local workspace assets folder and return only the saved file path. Defaults to ./assets/figma. Refuses to export containers/screens unless allowFrameExport=true.",
+        "Export a specific Figma asset node (logo/icon/vector/image) to a local workspace assets folder and return only the saved file path. Defaults to ./assets. If the project has a more specific asset folder (e.g. src/assets, public/images, app/assets), pass outputDir explicitly. Refuses to export containers/screens unless allowFrameExport=true.",
         {
             id: ExportNodeParamsSchema.shape.id,
             format: ExportNodeParamsSchema.shape.format,

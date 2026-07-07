@@ -18,7 +18,7 @@ const DownloadFigmaImagesParamsSchema = z.object({
         filenameSuffix: z.string().regex(/^[a-zA-Z0-9_-]+$/).optional(),
     })).describe("Asset nodes to export. Use specific logo/icon/image child nodes, not parent screens."),
     pngScale: z.number().positive().max(4).default(2).optional(),
-    localPath: z.string().default("assets/figma").optional().describe("Directory to save images, relative to current workspace by default."),
+    localPath: z.string().default("assets").optional().describe("Directory to save images, relative to current workspace by default. Defaults to assets; if the project has a more specific folder, pass it explicitly, e.g. src/assets, public/images, or app/assets."),
     allowFrameExport: z.boolean().default(false).optional().describe("Set true only if intentionally downloading full screen/frame screenshots."),
 });
 
@@ -26,12 +26,12 @@ type DownloadFigmaImagesParams = z.infer<typeof DownloadFigmaImagesParamsSchema>
 
 function resolveLocalPath(localPath?: string): string {
     const base = process.cwd();
-    const requested = localPath || "assets/figma";
+    const requested = localPath || "assets";
     const resolved = path.isAbsolute(requested) ? path.resolve(requested) : path.resolve(base, requested);
 
     // Keep writes inside the current workspace unless the caller gives an explicit absolute path under cwd.
     if (!resolved.startsWith(base + path.sep) && resolved !== base) {
-        throw new Error(`Invalid localPath: ${requested}. Use a path inside the current workspace, e.g. assets/figma or public/images.`);
+        throw new Error(`Invalid localPath: ${requested}. Use a path inside the current workspace, e.g. assets, src/assets, public/images, or app/assets.`);
     }
     return resolved;
 }
@@ -51,11 +51,11 @@ function safeFileName(fileName: string): string {
 export function downloadFigmaImages(server: McpServer, taskManager: TaskManager) {
     server.tool(
         "download_figma_images",
-        "Official/Framelink-compatible local tool: export SVG/PNG/JPG/PDF asset nodes from the currently open Figma plugin into a workspace-relative directory. Use IDs from get_figma_data/get-node-info exportableAssets; do not use parent screen/frame IDs unless allowFrameExport=true.",
+        "Official/Framelink-compatible local tool: export SVG/PNG/JPG/PDF asset nodes from the currently open Figma plugin into a workspace-relative directory. Defaults to ./assets; if the project has a more specific asset folder (src/assets, public/images, app/assets), pass localPath explicitly. Use IDs from get_figma_data/get-node-info exportableAssets; do not use parent screen/frame IDs unless allowFrameExport=true.",
         DownloadFigmaImagesParamsSchema.shape,
         async (params: DownloadFigmaImagesParams) => {
             try {
-                const { nodes, pngScale = 2, localPath = "assets/figma", allowFrameExport = false } = DownloadFigmaImagesParamsSchema.parse(params);
+                const { nodes, pngScale = 2, localPath = "assets", allowFrameExport = false } = DownloadFigmaImagesParamsSchema.parse(params);
                 const outputDir = resolveLocalPath(localPath);
                 fs.mkdirSync(outputDir, { recursive: true });
 
