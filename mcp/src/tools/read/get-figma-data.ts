@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import type { TaskManager } from "../../task-manager.js";
+import { getReadTaskTimeoutMs } from "../../timeout-config.js";
 import { safeToolProcessor } from "../safe-tool-processor.js";
 
 const GetFigmaDataParamsSchema = z.object({
@@ -33,7 +34,7 @@ export function getFigmaData(server: McpServer, taskManager: TaskManager) {
                     id: nodeId,
                     recursive: true,
                     maxDepth: params.depth ?? 3,
-                }, 120000)
+                }, getReadTaskTimeoutMs())
             );
         }
     );

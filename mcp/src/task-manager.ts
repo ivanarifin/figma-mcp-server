@@ -1,5 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { generateUUID } from "./utils.js";
+import { getDefaultTaskTimeoutMs } from "./timeout-config.js";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "failed" | "timed_out";
 
@@ -57,12 +58,12 @@ export class TaskManager {
     public runTask<TResult, TArgs>(
         command: string,
         args: TArgs,
-        timeoutMs: number = 60000): Promise<TResult> {
+        timeoutMs: number = getDefaultTaskTimeoutMs()): Promise<TResult> {
         const id = generateUUID();
         const promise = new Promise((resolve, reject) => {
             const task = this.addTask(id, command, args, resolve, reject);
             task.timeoutId = setTimeout(() => {
-                this.updateTask(id, { error: "Task timed out" }, "timed_out");
+                this.updateTask(id, { error: `Task timed out after ${timeoutMs}ms` }, "timed_out");
             }, timeoutMs);
         });
         return promise as Promise<any>;

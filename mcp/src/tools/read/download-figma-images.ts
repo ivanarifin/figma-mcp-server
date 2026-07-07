@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import type { TaskManager, TaskResult } from "../../task-manager.js";
+import { getExportTaskTimeoutMs } from "../../timeout-config.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -71,7 +72,7 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
                         format,
                         scale,
                         allowFrameExport,
-                    }, 120000);
+                    }, getExportTaskTimeoutMs());
 
                     if (taskResult?.isError || !taskResult?.content?.bytes) {
                         results.push(`- ${request.fileName}: FAILED ${JSON.stringify(taskResult?.content ?? taskResult)}`);

@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import type { TaskManager, TaskResult } from "../../task-manager.js";
 import { ExportNodeParamsSchema } from "../../shared/types/index.js";
+import { getExportTaskTimeoutMs } from "../../timeout-config.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -73,7 +74,7 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
                 format: taskFormat,
                 scale: taskScale,
                 allowFrameExport: allowFrameExport === true
-            }, 120000);
+            }, getExportTaskTimeoutMs());
 
             const payload = taskResult?.content;
 
