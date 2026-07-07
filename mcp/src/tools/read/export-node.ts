@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import type { TaskManager, TaskResult } from "../../task-manager.js";
 import { ExportNodeParamsSchema } from "../../shared/types/index.js";
 import { getExportTaskTimeoutMs } from "../../timeout-config.js";
+import { logEvent } from "../../logger.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -90,6 +91,7 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
             const taskFormat = format || "PNG";
             const taskScale = Math.max(0.1, Math.min(scale || 1, 4));
             const resolvedOutputDir = outputDir ? path.resolve(outputDir) : getDefaultOutputDir();
+            logEvent('export_node.start', { id, format: taskFormat, scale: taskScale, outputDir: resolvedOutputDir, fileName, allowFrameExport: allowFrameExport === true, timeoutMs: getExportTaskTimeoutMs() });
 
             const taskResult = await taskManager.runTask<TaskResult, any>("export-node", {
                 id,
@@ -99,6 +101,7 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
             }, getExportTaskTimeoutMs());
 
             const payload = taskResult?.content;
+            logEvent('export_node.task_done', { id, isError: taskResult?.isError, contentKeys: payload && typeof payload === 'object' ? Object.keys(payload) : undefined });
 
             if (taskResult?.isError) {
                 return {
@@ -121,7 +124,9 @@ export function exportNode(server: McpServer, taskManager: TaskManager) {
                     const baseFileName = fileName || `${nodeName}_${safeId}`;
                     const targetPath = getSafeTargetPath(resolvedOutputDir, baseFileName, ext);
 
+                    logEvent('export_node.write_start', { id, targetPath, bytes: buffer.length });
                     fs.writeFileSync(targetPath, buffer);
+                    logEvent('export_node.write_done', { id, targetPath, bytes: buffer.length });
 
                     return {
                         content: [{

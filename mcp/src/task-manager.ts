@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { generateUUID } from "./utils.js";
 import { getDefaultTaskTimeoutMs } from "./timeout-config.js";
+import { logEvent } from "./logger.js";
 
 type TaskStatus = "pending" | "in_progress" | "completed" | "failed" | "timed_out";
 
@@ -68,7 +69,9 @@ export class TaskManager {
         const id = generateUUID();
         const promise = new Promise((resolve, reject) => {
             const task = this.addTask(id, command, args, resolve, reject);
+            logEvent('task.created', { taskId: id, command, timeoutMs });
             task.timeoutId = setTimeout(() => {
+                logEvent('task.timeout', { taskId: id, command, timeoutMs });
                 this.updateTask(id, { error: `Task timed out after ${timeoutMs}ms` }, "timed_out");
             }, timeoutMs);
         });
@@ -125,6 +128,7 @@ export class TaskManager {
 
             task.status = status;
             task.updatedAt = new Date();
+            logEvent('task.update', { taskId: id, command: task.command, status, durationMs: task.updatedAt.getTime() - task.createdAt.getTime() });
         }
         else {
             console.error("Attempt to update task that does not exist", id, sanitizeForLogs(result), status);

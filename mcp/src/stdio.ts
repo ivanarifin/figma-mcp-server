@@ -3,6 +3,7 @@ import { getServer } from './server.js';
 import { config, PORT } from './config.js';
 import { Server } from 'socket.io';
 import http from 'http';
+import { getActiveLogFilePath, logEvent } from './logger.js';
 
 export async function startSTDIO() {
     try {
@@ -22,6 +23,7 @@ export async function startSTDIO() {
             pingInterval: 25000
         });
         
+        logEvent('stdio.starting', { port: PORT, cwd: process.cwd(), logFile: getActiveLogFilePath() });
         const server = await getServer(socketServer);
         const transport = new StdioServerTransport();
         await server.connect(transport);
@@ -29,8 +31,10 @@ export async function startSTDIO() {
         // Start HTTP server for Socket.IO connections from Figma plugin
         httpServer.listen(PORT, () => {
             console.error(`Socket.IO server listening on http://localhost:${PORT}`);
+            logEvent('stdio.listening', { port: PORT, cwd: process.cwd(), logFile: getActiveLogFilePath() });
         });
     } catch (error) {
+        logEvent('stdio.start_error', { error: error instanceof Error ? error.message : String(error) });
         console.error('Error starting STDIO server:', error);
         throw error;
     }

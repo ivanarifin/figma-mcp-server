@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import type { TaskManager, TaskResult } from "../../task-manager.js";
 import { getImageDownloadTimeoutMs } from "../../timeout-config.js";
+import { logEvent } from "../../logger.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -74,6 +75,7 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
         async (params: DownloadFigmaImagesParams) => {
             try {
                 const { nodes, pngScale = 2, localPath = "assets", allowFrameExport = false } = DownloadFigmaImagesParamsSchema.parse(params);
+                logEvent('download_figma_images.start', { nodeCount: nodes.length, localPath, pngScale, allowFrameExport });
                 const request = nodes[0];
                 if (!request) {
                     return {
@@ -91,6 +93,7 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
                 const nodeId = request.nodeId.replace(/-/g, ":");
                 const format = formatFromFileName(request.fileName);
                 const scale = format === "PNG" || format === "JPG" ? Math.max(0.1, Math.min(pngScale, 4)) : 1;
+                logEvent('download_figma_images.export_task_start', { nodeId, fileName: request.fileName, format, scale, timeoutMs: getImageDownloadTimeoutMs() });
 
                 const taskResult = await taskManager.runTask<TaskResult, any>("export-node", {
                     id: nodeId,
@@ -99,6 +102,7 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
                     allowFrameExport,
                 }, getImageDownloadTimeoutMs());
 
+                logEvent('download_figma_images.export_task_done', { nodeId, fileName: request.fileName, isError: taskResult?.isError, contentKeys: taskResult?.content && typeof taskResult.content === 'object' ? Object.keys(taskResult.content) : undefined });
                 const buffer = payloadToBuffer(taskResult?.content);
                 if (taskResult?.isError || !buffer) {
                     return {
@@ -119,7 +123,9 @@ export function downloadFigmaImages(server: McpServer, taskManager: TaskManager)
                     };
                 }
 
+                logEvent('download_figma_images.write_start', { nodeId, targetPath, bytes: buffer.length });
                 fs.writeFileSync(targetPath, buffer);
+                logEvent('download_figma_images.write_done', { nodeId, targetPath, bytes: buffer.length });
                 const source = taskResult.content?.source ? ` | source=${taskResult.content.source}` : "";
 
                 return {

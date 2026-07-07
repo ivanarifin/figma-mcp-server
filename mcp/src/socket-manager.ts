@@ -1,5 +1,6 @@
 import type { FromPluginMessage } from "@shared/types";
 import type { Server } from "socket.io";
+import { logEvent } from "./logger.js";
 
 type SocketMessage = "start-task" | "task-finished" | "task-failed";
 
@@ -33,14 +34,18 @@ export class SocketManager {
 
         this.server.on('connection', (socket) => {
             console.error(`[socket] Figma plugin/client connected: ${socket.id}`);
+            logEvent('socket.connected', { socketId: socket.id, connectedClients: this.server.sockets.sockets.size });
 
             socket.on('disconnect', (reason) => {
                 console.error(`[socket] Figma plugin/client disconnected: ${socket.id} reason=${reason}`);
+                logEvent('socket.disconnected', { socketId: socket.id, reason, connectedClients: this.server.sockets.sockets.size });
             });
 
             socket.on('task-finished', (data: FromPluginMessage) => {
                 try {
-                    console.error('[socket] task-finished', summarizePayload(data));
+                    const summary = summarizePayload(data);
+                    console.error('[socket] task-finished', summary);
+                    logEvent('socket.task_finished', summary);
                     if (this._onTaskFinishedCallback) {
                         this._onTaskFinishedCallback(data);
                     }
@@ -51,7 +56,9 @@ export class SocketManager {
     
             socket.on('task-failed', (data: FromPluginMessage) => {
                 try {
-                    console.error('[socket] task-failed', summarizePayload(data));
+                    const summary = summarizePayload(data);
+                    console.error('[socket] task-failed', summary);
+                    logEvent('socket.task_failed', summary);
                     if (this._onTaskErrorCallback) {
                         this._onTaskErrorCallback(data);
                     }
@@ -65,6 +72,7 @@ export class SocketManager {
     public sendMessage(message: SocketMessage, data: any): boolean {
         const sockets = this.server.sockets.sockets.size;
         console.error(`[socket] send ${message} command=${data?.command ?? ''} taskId=${data?.id ?? ''} connectedClients=${sockets}`);
+        logEvent('socket.send', { message, command: data?.command, taskId: data?.id, connectedClients: sockets });
         if (sockets === 0) {
             return false;
         }

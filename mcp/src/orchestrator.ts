@@ -1,5 +1,6 @@
 import type { SocketManager } from "./socket-manager.js";
 import type { TaskManager } from "./task-manager.js";
+import { logEvent } from "./logger.js";
 
 export class Orchestrator {
 
@@ -12,6 +13,7 @@ export class Orchestrator {
         this.taskManager.onTaskAdded((task) => {
             const sent = this.socketManager.sendMessage('start-task', task);
             if (!sent) {
+                logEvent('task.no_connected_plugin', { taskId: task.id, command: task.command });
                 this.taskManager.updateTask(
                     task.id,
                     {
