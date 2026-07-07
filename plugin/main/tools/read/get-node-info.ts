@@ -19,7 +19,7 @@ function collectExportableAssets(node: any, assets: any[] = []): any[] {
             height: node.height,
             reason: hasImageFill ? "image-fill" : isVectorLike ? "vector-like" : "small-container/icon-candidate",
             recommendedExportFormat: isVectorLike || isSmallContainer ? "SVG" : "PNG",
-            exportHint: `Use export-node with id \"${node.id}\". Do not export parent screens/frames unless allowFrameExport=true is intentional.`
+            exportHint: `Use MCP tool download_figma_images with nodeId \"${node.id}\" and a fileName. Do not use parent screens/frames as assets.`
         });
     }
 
@@ -45,11 +45,11 @@ export async function getNodeInfo(args: GetNodeInfoParams): Promise<ToolResult> 
         return {
             isError: false,
             content: {
-                purpose: "Use this compact Figma node tree to generate code. Map layoutMode/padding/itemSpacing to flexbox, text fields to typography, fills/strokes/effects to CSS styles. For logos/icons/images, export the specific child asset node from exportableAssets; do not export the whole screen/frame unless explicitly requested.",
+                purpose: "Use this compact Figma node tree to generate code. Map layoutMode/padding/itemSpacing to flexbox, text fields to typography, fills/strokes/effects to CSS styles. For logos/icons/images, download the specific child asset node from exportableAssets using MCP tool download_figma_images; do not export the whole screen/frame.",
                 usageHints: [
                     "For code generation: read node.children recursively and translate layout/style properties into code.",
-                    "For assets: choose the smallest relevant exportableAssets item (logo/icon/image), then call export-node on that child id.",
-                    "Avoid exporting screen/container frames as assets. export-node blocks that by default unless allowFrameExport=true.",
+                    "For assets: choose the smallest relevant exportableAssets item (logo/icon/image), then call MCP tool download_figma_images with that child nodeId and a fileName.",
+                    "Avoid parent screen/container frames as assets. download_figma_images is the supported asset-download tool for Figma-to-code.",
                     "If childrenTruncated=true, call get-node-info on the relevant child id or increase maxDepth for smaller nodes."
                 ],
                 requestedNodeId: normalizedId,
